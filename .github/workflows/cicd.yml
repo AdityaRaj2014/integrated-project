@@ -1,0 +1,239 @@
+﻿name: CI/CD Pipeline - Build & Deploy
+
+# ============================================================================
+# WORKFLOW TRIGGERS
+# ============================================================================
+# Triggers on:
+# 1. Push to main branch
+# 2. Manual workflow dispatch for on-demand builds
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+# Global variables used across all jobs
+env:
+  AWS_REGION: eu-north-1
+  DOCKERHUB_USERNAME: adityaraj2104
+  REGISTRY: docker.io
+
+# ============================================================================
+# JOBS DEFINITION
+# ============================================================================
+jobs:
+  # ============================================================================
+  # BUILD JOB: Build Docker images and push to Docker Hub
+  # ============================================================================
+  # Purpose: Build 3 Docker images and push to Docker Hub with latest & sha tags
+  # Outputs: Image tags for reference in deploy job
+  build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      
+    outputs:
+      healthcare_backend_tag: ${{ steps.meta_backend.outputs.tags }}
+      healthcare_frontend_tag: ${{ steps.meta_frontend.outputs.tags }}
+      rag_backend_tag: ${{ steps.meta_rag.outputs.tags }}
+
+    steps:
+      # ====================================================================
+      # STEP 1: Checkout repository code
+      # ====================================================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ====================================================================
+      # STEP 2: Set up Docker Buildx for multi-platform builds
+      # ====================================================================
+      # Enables advanced Docker build features and caching
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ====================================================================
+      # STEP 3: Authenticate with Docker Hub
+      # ====================================================================
+      # Uses DOCKERHUB_TOKEN secret for secure authentication
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ====================================================================
+      # STEP 4: Build and push Healthcare Backend image
+      # ====================================================================
+      # Image: adityaraj2104/healthcare-backend:latest & :sha
+      - name: Generate metadata for Healthcare Backend
+        id: meta_backend
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-backend:latest,${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-backend:${{ github.sha }}"
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "Healthcare Backend tags: ${TAGS}"
+
+      - name: Build and push Healthcare Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./healthcare-planner-agent-datagami
+          file: ./healthcare-planner-agent-datagami/Dockerfile
+          push: true
+          tags: ${{ steps.meta_backend.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-backend:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-backend:buildcache,mode=max
+
+      # ====================================================================
+      # STEP 5: Build and push RAG Backend image
+      # ====================================================================
+      # Image: adityaraj2104/rag-backend:latest & :sha
+      - name: Generate metadata for RAG Backend
+        id: meta_rag
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/rag-backend:latest,${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/rag-backend:${{ github.sha }}"
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "RAG Backend tags: ${TAGS}"
+
+      - name: Build and push RAG Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Rag-Chat-Bot
+          file: ./Rag-Chat-Bot/Dockerfile
+          push: true
+          tags: ${{ steps.meta_rag.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/rag-backend:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/rag-backend:buildcache,mode=max
+
+      # ====================================================================
+      # STEP 6: Build and push Healthcare Frontend image
+      # ====================================================================
+      # Image: adityaraj2104/healthcare-frontend:latest & :sha
+      - name: Generate metadata for Healthcare Frontend
+        id: meta_frontend
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-frontend:latest,${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-frontend:${{ github.sha }}"
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "Healthcare Frontend tags: ${TAGS}"
+
+      - name: Build and push Healthcare Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./healthcare-planner-agent-datagami
+          file: ./healthcare-planner-agent-datagami/Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta_frontend.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-frontend:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/healthcare-frontend:buildcache,mode=max
+
+      # ====================================================================
+      # STEP 7: Notify build completion
+      # ====================================================================
+      - name: Build summary
+        run: |
+          echo "=========================================="
+          echo "✅ All Docker images built successfully!"
+          echo "=========================================="
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "=========================================="
+
+  # ============================================================================
+  # DEPLOY JOB: Create deployment package and deploy to AWS Elastic Beanstalk
+  # ============================================================================
+  # Purpose: Package Dockerrun.aws.json + docker-compose.yml and deploy to EB
+  # Depends on: build job (waits for all images to be pushed)
+  deploy:
+    name: Deploy to Elastic Beanstalk
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+    
+    steps:
+      # ====================================================================
+      # STEP 1: Checkout repository code
+      # ====================================================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ====================================================================
+      # STEP 2: Verify deployment files exist
+      # ====================================================================
+      - name: Verify deployment files
+        run: |
+          echo "Checking for deployment configuration files..."
+          test -f Dockerrun.aws.json && echo "✓ Dockerrun.aws.json found" || (echo "✗ Dockerrun.aws.json NOT found" && exit 1)
+          test -f docker-compose.yml && echo "✓ docker-compose.yml found" || (echo "✗ docker-compose.yml NOT found" && exit 1)
+
+      # ====================================================================
+      # STEP 3: Create deployment package
+      # ====================================================================
+      # Packages only required files for Elastic Beanstalk
+      - name: Create deployment package
+        run: |
+          echo "Creating deployment package..."
+          mkdir -p beanstalk-deploy
+          cp Dockerrun.aws.json beanstalk-deploy/
+          cp docker-compose.yml beanstalk-deploy/
+          cd beanstalk-deploy
+          zip -r ../beanstalk-deploy.zip .
+          cd ..
+          ls -lh beanstalk-deploy.zip
+          echo "✓ Deployment package created successfully!"
+
+      # ====================================================================
+      # STEP 4: Configure AWS credentials
+      # ====================================================================
+      # Sets up AWS CLI with credentials from GitHub secrets
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ====================================================================
+      # STEP 5: Deploy to AWS Elastic Beanstalk
+      # ====================================================================
+      # Deploys the zip package to specified EB environment
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ${{ env.AWS_REGION }}
+          application_name: ${{ secrets.EB_APPLICATION_NAME }}
+          environment_name: ${{ secrets.EB_ENVIRONMENT_NAME }}
+          version_label: ${{ github.sha }}-${{ github.run_id }}
+          deployment_package: beanstalk-deploy.zip
+          wait_for_deployment: true
+
+      # ====================================================================
+      # STEP 6: Deployment summary
+      # ====================================================================
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "=========================================="
+          echo "✅ Deployment completed successfully!"
+          echo "=========================================="
+          echo "Application: ${{ secrets.EB_APPLICATION_NAME }}"
+          echo "Environment: ${{ secrets.EB_ENVIRONMENT_NAME }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "Version Label: ${{ github.sha }}-${{ github.run_id }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "=========================================="
+
+      # ====================================================================
+      # STEP 7: Notify on deployment failure
+      # ====================================================================
+      - name: Deployment failure notification
+        if: failure()
+        run: |
+          echo "⚠️  Deployment to Elastic Beanstalk failed!"
+          echo "Check the logs above for details."
+          exit 1
