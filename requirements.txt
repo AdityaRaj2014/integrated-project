@@ -1,0 +1,36 @@
+# Merged requirements for combined AgenticAI project
+
+# Web framework / ASGI server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+
+# Environment/config
+python-dotenv>=1.0.0
+
+# Validation / HTTP
+pydantic>=2.10.0
+httpx>=0.28.0
+requests
+
+# Databases
+motor>=3.6.0
+pymongo>=4.10.0
+
+# Vector & embeddings
+faiss-cpu>=1.9.0
+sentence-transformers>=3.3.0
+
+# NLP / utilities
+numpy>=2.0.0
+beautifulsoup4
+
+# Additional/third-party agents & tools
+crewai[tools]
+langchain-groq
+groq
+litellm
+duckduckgo-search
+ddgs
+
+# Note: Frontend/node deps remain in each project's `package.json` files.
