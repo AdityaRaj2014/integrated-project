@@ -183,7 +183,34 @@ jobs:
           test -f docker-compose.yml && echo "✓ docker-compose.yml found" || (echo "✗ docker-compose.yml NOT found" && exit 1)
 
       # ====================================================================
-      # STEP 3: Create deployment package
+      # STEP 3: Substitute environment variables in Dockerrun.aws.json
+      # ====================================================================
+      # Replaces placeholder variables with GitHub secrets
+      - name: Substitute environment variables in Dockerrun.aws.json
+        run: |
+          echo "Substituting environment variables in Dockerrun.aws.json..."
+          # Install envsubst
+          apt-get update && apt-get install -y gettext-base
+          
+          # Export all required variables
+          export GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}"
+          export MONGODB_URL="${{ secrets.MONGODB_URL }}"
+          export DATABASE_NAME="${{ secrets.DATABASE_NAME }}"
+          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+          export OPENAI_API_BASE="${{ secrets.OPENAI_API_BASE }}"
+          export LLM_MODEL="${{ secrets.LLM_MODEL }}"
+          
+          # Create backup
+          cp Dockerrun.aws.json Dockerrun.aws.json.bak
+          
+          # Substitute variables
+          envsubst < Dockerrun.aws.json.bak > Dockerrun.aws.json
+          
+          echo "✓ Environment variables substituted successfully!"
+          echo "✓ Dockerrun.aws.json updated with secrets from GitHub"
+
+      # ====================================================================
+      # STEP 4: Create deployment package
       # ====================================================================
       # Packages only required files for Elastic Beanstalk
       - name: Create deployment package
@@ -199,7 +226,7 @@ jobs:
           echo "✓ Deployment package created successfully!"
 
       # ====================================================================
-      # STEP 4: Configure AWS credentials
+      # STEP 5: Configure AWS credentials
       # ====================================================================
       # Sets up AWS CLI with credentials from GitHub secrets
       - name: Configure AWS credentials
@@ -210,7 +237,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # ====================================================================
-      # STEP 5: Deploy to AWS Elastic Beanstalk
+      # STEP 6: Deploy to AWS Elastic Beanstalk
       # ====================================================================
       # Deploys the zip package to specified EB environment
       - name: Deploy to Elastic Beanstalk
@@ -226,7 +253,7 @@ jobs:
           wait_for_deployment: true
 
       # ====================================================================
-      # STEP 6: Deployment summary
+      # STEP 7: Deployment summary
       # ====================================================================
       - name: Deployment summary
         if: success()
@@ -243,7 +270,7 @@ jobs:
           echo "=========================================="
 
       # ====================================================================
-      # STEP 7: Notify on deployment failure
+      # STEP 8: Notify on deployment failure
       # ====================================================================
       - name: Deployment failure notification
         if: failure()

@@ -12,7 +12,15 @@
       "environment": [
         {
           "name": "GROQ_API_KEY",
-          "value": ""
+          "value": "$GROQ_API_KEY"
+        },
+        {
+          "name": "MONGODB_URL",
+          "value": "$MONGODB_URL"
+        },
+        {
+          "name": "DATABASE_NAME",
+          "value": "$DATABASE_NAME"
         }
       ]
     },
@@ -27,15 +35,27 @@
       "environment": [
         {
           "name": "GROQ_API_KEY",
-          "value": ""
+          "value": "$GROQ_API_KEY"
         },
         {
           "name": "MONGODB_URL",
-          "value": ""
+          "value": "$MONGODB_URL"
         },
         {
           "name": "DATABASE_NAME",
-          "value": ""
+          "value": "$DATABASE_NAME"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "value": "$OPENAI_API_KEY"
+        },
+        {
+          "name": "OPENAI_API_BASE",
+          "value": "$OPENAI_API_BASE"
+        },
+        {
+          "name": "LLM_MODEL",
+          "value": "$LLM_MODEL"
         }
       ]
     },
