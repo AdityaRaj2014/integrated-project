@@ -46,16 +46,8 @@
           "value": "$DATABASE_NAME"
         },
         {
-          "name": "OPENAI_API_KEY",
-          "value": "$OPENAI_API_KEY"
-        },
-        {
-          "name": "OPENAI_API_BASE",
-          "value": "$OPENAI_API_BASE"
-        },
-        {
-          "name": "LLM_MODEL",
-          "value": "$LLM_MODEL"
+          "name": "GROQ_MODEL",
+          "value": "$GROQ_MODEL"
         }
       ]
     },

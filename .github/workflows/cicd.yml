@@ -194,11 +194,9 @@ jobs:
           
           # Export all required variables
           export GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}"
+          export GROQ_MODEL="${{ secrets.GROQ_MODEL }}"
           export MONGODB_URL="${{ secrets.MONGODB_URL }}"
           export DATABASE_NAME="${{ secrets.DATABASE_NAME }}"
-          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
-          export OPENAI_API_BASE="${{ secrets.OPENAI_API_BASE }}"
-          export LLM_MODEL="${{ secrets.LLM_MODEL }}"
           
           # Create backup
           cp Dockerrun.aws.json Dockerrun.aws.json.bak

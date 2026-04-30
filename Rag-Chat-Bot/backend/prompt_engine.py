@@ -63,11 +63,28 @@ class PromptEngine:
     """
     
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self.api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
-        self.model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+        # Provider selection:
+        # - Default to GROQ for deployments using Groq-compatible OpenAI API format
+        # - Allow explicit override via LLM_PROVIDER=openai
+        provider = self._clean_env("LLM_PROVIDER", "groq").lower()
+        use_openai = provider == "openai"
+
+        if use_openai:
+            self.api_key = self._clean_env("OPENAI_API_KEY")
+            self.api_base = self._clean_env("OPENAI_API_BASE", "https://api.openai.com/v1")
+            self.model = self._clean_env("LLM_MODEL", "gpt-3.5-turbo")
+        else:
+            self.api_key = self._clean_env("GROQ_API_KEY") or self._clean_env("OPENAI_API_KEY")
+            self.api_base = self._clean_env("GROQ_API_BASE", "https://api.groq.com/openai/v1")
+            self.model = self._clean_env("GROQ_MODEL", "llama-3.1-8b-instant")
+
         self.max_tokens = int(os.getenv("MAX_TOKENS", "1500"))
         self.temperature = float(os.getenv("TEMPERATURE", "0.3"))
+
+    @staticmethod
+    def _clean_env(name: str, default: str = "") -> str:
+        """Read env vars defensively, stripping whitespace and surrounding quotes."""
+        return os.getenv(name, default).strip().strip('"').strip("'")
     
     def build_prompt(
         self,
